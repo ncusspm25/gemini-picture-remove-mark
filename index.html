@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Gemini 無痕修復 v5.0</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; width: 90%; max-width: 500px; }
+        .upload-area { border: 2px dashed #007bff; padding: 30px; border-radius: 15px; background: #f8fbff; cursor: pointer; margin: 20px 0; }
+        canvas { max-width: 100%; border-radius: 10px; display: none; margin-top: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .btn { display: block; background: #28a745; color: white; padding: 15px; border-radius: 12px; text-decoration: none; font-weight: bold; margin-top: 15px; border: none; font-size: 16px; }
+        #status { color: #666; font-size: 14px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>✨ Gemini 無痕修復 v5.0</h2>
+    <p id="status">準備就緒 (手機專用輕量版)</p>
+
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <strong>點擊選擇吉伊卡哇圖片</strong>
+        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleImage(this.files[0])">
+    </div>
+
+    <canvas id="mainCanvas"></canvas>
+    
+    <a id="downloadBtn" class="btn" style="display:none;">下載完美無痕圖片</a>
+</div>
+
+<script>
+function handleImage(file) {
+    if (!file) return;
+    const status = document.getElementById('status');
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    const dlBtn = document.getElementById('downloadBtn');
+    
+    status.innerText = "🚀 正在進行智慧無痕修補...";
+    
+    const img = new Image();
+    img.onload = function() {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        canvas.style.display = "block";
+        
+        // 1. 畫上原圖
+        ctx.drawImage(img, 0, 0);
+
+        // --- 智慧無痕融合演算法 ---
+        const w = img.width;
+        const h = img.height;
+        
+        // 針對不同解析度自動調整修補範圍 (約 8%)
+        const size = Math.round(w * 0.08); 
+        const x = w - size;
+        const y = h - size;
+
+        // 建立一個離屏畫布來處理「羽化區塊」
+        const patchCanvas = document.createElement('canvas');
+        patchCanvas.width = size;
+        patchCanvas.height = size;
+        const pCtx = patchCanvas.getContext('2d');
+
+        // A. 抓取浮水印「左方」或「上方」的乾淨背景
+        // 優先從左邊抓取，因為草地橫向連續性較好
+        pCtx.drawImage(canvas, x - size, y, size, size, 0, 0, size, size);
+
+        // B. 建立圓形徑向漸層遮罩 (這是無痕的關鍵)
+        // 讓中心完全覆蓋，邊緣完全透明
+        const gradient = ctx.createRadialGradient(
+            x + size/2, y + size/2, size * 0.1, // 中心
+            x + size/2, y + size/2, size * 0.6  // 擴散邊界
+        );
+        gradient.addColorStop(0, 'rgba(0,0,0,1)');   // 中心完全不透明
+        gradient.addColorStop(0.8, 'rgba(0,0,0,0.8)'); 
+        gradient.addColorStop(1, 'rgba(0,0,0,0)');   // 邊緣完全透明
+
+        // C. 使用「目標重疊」模式進行繪製
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out'; // 先把菱形位置挖掉一個羽化的洞
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x + size/2, y + size/2, size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        // 在洞的位置補上剛才抓取的背景，因為有羽化，會跟原圖完美融合
+        ctx.globalAlpha = 1.0;
+        // 稍微做一點模糊處理增加自然感
+        ctx.filter = 'blur(1px)'; 
+        ctx.drawImage(patchCanvas, x, y, size, size);
+        ctx.restore();
+
+        // 完工
+        status.innerText = "✅ 修復完成！";
+        dlBtn.href = canvas.toDataURL("image/png");
+        dlBtn.style.display = "block";
+        status.style.color = "#28a745";
+    };
+    
+    const reader = new FileReader();
+    reader.onload = (e) => img.src = e.target.result;
+    reader.readAsDataURL(file);
+}
+</script>
+
+</body>
+</html>
