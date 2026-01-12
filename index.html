@@ -2,42 +2,36 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>Gemini 無痕修復 v9.0</title>
+    <title>Gemini 無痕修復 v10.0</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; width: 95%; max-width: 500px; }
-        
-        /* 進度條樣式 */
         .progress-container { display: none; width: 100%; background-color: #eee; border-radius: 10px; margin: 20px 0; overflow: hidden; }
-        .progress-bar { width: 0%; height: 20px; background-color: #007bff; transition: width 0.3s; }
-        
+        .progress-bar { width: 0%; height: 20px; background-color: #28a745; transition: width 0.3s; }
         #status { color: #555; margin: 10px 0; font-size: 14px; font-weight: bold; }
         .upload-area { border: 2px dashed #007bff; padding: 30px; border-radius: 15px; background: #f8fbff; cursor: pointer; }
-        canvas { max-width: 100%; border-radius: 10px; display: none; margin-top: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .btn { display: inline-block; background: #28a745; color: white; padding: 12px 25px; border-radius: 10px; text-decoration: none; font-weight: bold; margin-top: 15px; border: none; }
-        .timer { font-size: 12px; color: #999; margin-top: 5px; }
+        canvas { max-width: 100%; border-radius: 10px; display: none; margin-top: 15px; }
+        .btn { display: inline-block; background: #007bff; color: white; padding: 12px 25px; border-radius: 10px; text-decoration: none; font-weight: bold; margin-top: 15px; border: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>🎨 智慧無痕修復 v9.0</h2>
-    <div id="status">正在加載 AI 核心 (OpenCV)...</div>
+    <h2>🎨 智慧無痕修復 v10.0</h2>
+    <div id="status">正在加載核心...</div>
     
     <div class="progress-container" id="pContainer">
         <div class="progress-bar" id="pBar"></div>
     </div>
-    <div class="timer" id="timerText"></div>
 
     <div class="upload-area" id="dropZone">
-        <strong>點擊選擇圖片</strong>
+        <strong>點擊上傳吉伊卡哇圖片</strong>
         <input type="file" id="fileInput" accept="image/*" style="display:none">
     </div>
 
     <canvas id="outputCanvas"></canvas>
-    
-    <a id="downloadBtn" class="btn" style="display:none;">下載結果</a>
+    <a id="downloadBtn" class="btn" style="display:none; background:#28a745;">下載圖片</a>
 </div>
 
 <script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="cvReady();"></script>
@@ -47,31 +41,22 @@ let cvLoaded = false;
 const status = document.getElementById('status');
 const pBar = document.getElementById('pBar');
 const pContainer = document.getElementById('pContainer');
-const timerText = document.getElementById('timerText');
 const canvas = document.getElementById('outputCanvas');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
 function cvReady() {
     cvLoaded = true;
-    status.innerText = "✅ 引擎已就緒";
-    status.style.color = "#28a745";
+    status.innerText = "✅ 引擎就緒";
 }
 
 document.getElementById('dropZone').onclick = () => document.getElementById('fileInput').click();
 document.getElementById('fileInput').onchange = (e) => handleFile(e.target.files[0]);
 
-function updateProgress(percent, msg, timeRem) {
-    pBar.style.width = percent + "%";
-    status.innerText = msg;
-    if (timeRem) timerText.innerText = `預計剩餘時間: ${timeRem} 秒`;
-    else timerText.innerText = "";
-}
-
 function handleFile(file) {
     if (!file || !cvLoaded) return;
-    
     pContainer.style.display = "block";
-    updateProgress(10, "正在讀取圖片...", 5);
+    pBar.style.width = "20%";
+    status.innerText = "讀取中...";
     
     const img = new Image();
     img.onload = () => {
@@ -79,50 +64,53 @@ function handleFile(file) {
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
 
-        updateProgress(30, "正在分析紋理...", 4);
-
-        // 使用 setTimeout 讓 UI 有機會更新進度條
         setTimeout(() => {
-            updateProgress(50, "正在鎖定右下角區域...", 3);
+            const w = canvas.width;
+            const h = canvas.height;
             
+            // --- 安全計算區域 (ROI) ---
+            // 確保修補範圍不會大於整張圖片
+            let roiSize = Math.min(Math.round(w * 0.15), Math.round(h * 0.15), 300);
+            let roiX = w - roiSize;
+            let roiY = h - roiSize;
+
+            pBar.style.width = "60%";
+            status.innerText = "AI 像素運算中...";
+
             setTimeout(() => {
-                const w = img.width;
-                const h = img.height;
-                const roiSize = Math.round(w * 0.12);
-                const roiX = w - roiSize;
-                const roiY = h - roiSize;
+                try {
+                    // 從 Canvas 抓取局部數據
+                    let roiData = ctx.getImageData(roiX, roiY, roiSize, roiSize);
+                    let src = cv.matFromImageData(roiData);
+                    let mask = cv.Mat.zeros(src.rows, src.cols, cv.CV_8U);
+                    
+                    // 建立遮罩範圍：鎖定右下角的菱形位置
+                    // p1 設定為局部區域的 20% 位置，確保包覆菱形
+                    let p1 = new cv.Point(Math.round(roiSize * 0.2), Math.round(roiSize * 0.2));
+                    let p2 = new cv.Point(roiSize, roiSize);
+                    cv.rectangle(mask, p1, p2, [255, 255, 255, 255], -1);
 
-                updateProgress(70, "AI 正在計算像素填充...", 2);
+                    let dst = new cv.Mat();
+                    // 執行專業修復
+                    cv.inpaint(src, mask, dst, 3, cv.INPAINT_TELEA);
 
-                setTimeout(() => {
-                    // 執行 OpenCV 運算
-                    try {
-                        const roiData = ctx.getImageData(roiX, roiY, roiSize, roiSize);
-                        let src = cv.matFromImageData(roiData);
-                        let mask = cv.Mat.zeros(src.rows, src.cols, cv.CV_8U);
-                        let p1 = new cv.Point(roiSize * 0.1, roiSize * 0.1);
-                        let p2 = new cv.Point(roiSize, roiSize);
-                        cv.rectangle(mask, p1, p2, [255, 255, 255, 255], -1);
+                    // 將結果畫回畫布
+                    let tempCanvas = document.createElement('canvas');
+                    cv.imshow(tempCanvas, dst);
+                    ctx.drawImage(tempCanvas, roiX, roiY);
 
-                        let dst = new cv.Mat();
-                        cv.inpaint(src, mask, dst, 3, cv.INPAINT_TELEA);
+                    pBar.style.width = "100%";
+                    status.innerText = "✨ 修復成功！";
+                    canvas.style.display = "block";
+                    document.getElementById('downloadBtn').href = canvas.toDataURL();
+                    document.getElementById('downloadBtn').style.display = "inline-block";
 
-                        const tempCanvas = document.createElement('canvas');
-                        cv.imshow(tempCanvas, dst);
-                        ctx.drawImage(tempCanvas, roiX, roiY);
-
-                        updateProgress(100, "✨ 修復完成！", 0);
-                        canvas.style.display = "block";
-                        document.getElementById('downloadBtn').href = canvas.toDataURL();
-                        document.getElementById('downloadBtn').style.display = "inline-block";
-
-                        src.delete(); mask.delete(); dst.delete();
-                    } catch (e) {
-                        status.innerText = "❌ 運算錯誤，請重試";
-                        console.error(e);
-                    }
-                }, 100);
-            }, 500);
+                    src.delete(); mask.delete(); dst.delete();
+                } catch (err) {
+                    console.error(err);
+                    status.innerText = "❌ 失敗：圖片解析度不相容";
+                }
+            }, 100);
         }, 500);
     };
     const reader = new FileReader();
