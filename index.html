@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Gemini 真正去浮水印工具 (OpenCV 版)</title>
+    <style>
+        body { font-family: 'PingFang TC', sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 40px; }
+        .container { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; max-width: 1000px; }
+        .loading-overlay { display: none; margin: 20px; color: #007bff; font-weight: bold; }
+        #canvasOutput { max-width: 100%; border-radius: 10px; margin-top: 20px; display: none; }
+        .btn { display: inline-block; background: #28a745; color: white; padding: 12px 30px; border-radius: 50px; text-decoration: none; margin-top: 20px; cursor: pointer; border: none; }
+        .status { margin: 10px; color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎨 Gemini 真正修復工具</h1>
+    <p id="opencvStatus">正在從雲端加載 OpenCV 核心 (約 10MB)，請稍候...</p>
+
+    <input type="file" id="fileInput" accept="image/*" style="display:none">
+    <button class="btn" id="uploadBtn" style="background:#007bff; display:none;">選擇吉伊卡哇圖片</button>
+
+    <div class="loading-overlay" id="loading">正在運算真正的像素修補...</div>
+    
+    <canvas id="canvasOutput"></canvas>
+    <br>
+    <a id="downloadLink" class="btn" style="display:none;">下載完美無痕圖片</a>
+</div>
+
+<script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="onOpenCvReady();"></script>
+
+<script>
+let imgElement = new Image();
+let fileInput = document.getElementById('fileInput');
+let uploadBtn = document.getElementById('uploadBtn');
+
+function onOpenCvReady() {
+    document.getElementById('opencvStatus').innerHTML = "✅ 核心加載完成！現在可以開始修補。";
+    uploadBtn.style.display = 'inline-block';
+}
+
+uploadBtn.onclick = () => fileInput.click();
+
+fileInput.onchange = (e) => {
+    let reader = new FileReader();
+    reader.onload = (event) => {
+        imgElement.src = event.target.result;
+    };
+    reader.readAsDataURL(e.target.files[0]);
+};
+
+imgElement.onload = function() {
+    document.getElementById('loading').style.display = 'block';
+    
+    // 延遲一點點讓 UI 能更新顯示 Loading
+    setTimeout(processImage, 100);
+};
+
+function processImage() {
+    let src = cv.imread(imgElement);
+    let dst = new cv.Mat();
+    let mask = cv.Mat.zeros(src.rows, src.cols, cv.CV_8U);
+
+    // 1. 精確定位右下角菱形區域
+    // Gemini 菱形大約占圖片寬度的 6%
+    let patchSize = Math.round(src.cols * 0.06);
+    let x = src.cols - patchSize - 5;
+    let y = src.rows - patchSize - 5;
+
+    // 2. 建立遮罩 (告訴 AI 哪裡要「變不見」)
+    let point1 = new cv.Point(x, y);
+    let point2 = new cv.Point(src.cols, src.rows);
+    cv.rectangle(mask, point1, point2, [255, 255, 255, 255], -1);
+
+    // 3. 執行專業級 Inpainting (修復)
+    // 使用 INPAINT_TELEA 演算法，它會根據邊緣自動延伸
+    cv.inpaint(src, mask, dst, 3, cv.INPAINT_TELEA);
+
+    // 4. 顯示結果
+    cv.imshow('canvasOutput', dst);
+    
+    document.getElementById('canvasOutput').style.display = 'block';
+    document.getElementById('loading').style.display = 'none';
+    
+    let downloadLink = document.getElementById('downloadLink');
+    downloadLink.href = document.getElementById('canvasOutput').toDataURL();
+    downloadLink.style.display = 'inline-block';
+
+    src.delete(); dst.delete(); mask.delete();
+}
+</script>
+
+</body>
+</html>
