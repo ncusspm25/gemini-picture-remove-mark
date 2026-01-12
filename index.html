@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Gemini 紋理修復工具 v6.0</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #eef2f3; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; width: 95%; max-width: 500px; }
+        .upload-area { border: 2px dashed #007bff; padding: 40px; border-radius: 15px; background: #f0f7ff; cursor: pointer; margin: 20px 0; }
+        canvas { max-width: 100%; border-radius: 10px; display: none; margin-top: 15px; }
+        .btn { display: block; background: #28a745; color: white; padding: 15px; border-radius: 12px; text-decoration: none; font-weight: bold; margin-top: 15px; border: none; font-size: 16px; }
+        #status { color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>🎨 智慧紋理修復 v6.0</h2>
+    <p id="status">準備就緒 (智慧擴散算法)</p>
+
+    <div class="upload-area" id="dropZone">
+        <strong>點擊或拖入圖片</strong>
+        <input type="file" id="fileInput" accept="image/*" style="display:none">
+    </div>
+
+    <canvas id="mainCanvas"></canvas>
+    
+    <a id="downloadBtn" class="btn" style="display:none;">下載無痕圖片</a>
+</div>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const dropZone = document.getElementById('dropZone');
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+dropZone.onclick = () => fileInput.click();
+
+fileInput.onchange = (e) => handleImage(e.target.files[0]);
+
+function handleImage(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => startRepair(img);
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function startRepair(img) {
+    document.getElementById('status').innerText = "🔮 正在編織紋理...";
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+
+    const w = canvas.width;
+    const h = canvas.height;
+    const size = Math.round(w * 0.08); // 偵測範圍
+    const x = w - size;
+    const y = h - size;
+
+    // --- 核心演算法：多層次智慧擴散 ---
+    // 我們不直接貼圖，而是把邊緣的像素「推」進去 10 次，每次都帶有透明度
+    for (let i = 0; i < 12; i++) {
+        const offset = i * 2;
+        const blurAmount = 1 + (i * 0.5);
+        
+        ctx.save();
+        // 建立一個逐漸縮小的修復環
+        ctx.beginPath();
+        ctx.rect(x + offset, y + offset, size - offset*2, size - offset*2);
+        ctx.clip();
+
+        // 從稍微偏移的位置抓取像素並進行模糊融合
+        ctx.filter = `blur(${blurAmount}px)`;
+        // 抓取菱形上方和左方的「乾淨紋理」混和
+        ctx.globalAlpha = 0.3; 
+        ctx.drawImage(canvas, x - 5, y - 5, size, size, x + offset, y + offset, size, size);
+        ctx.restore();
+    }
+
+    // --- 加入微量雜訊 (Noise Injection) ---
+    // 讓修復區域擁有跟原圖一樣的數位顆粒感，不會太死滑
+    const idata = ctx.getImageData(x, y, size, size);
+    const data = idata.data;
+    for (let i = 0; i < data.length; i += 4) {
+        const noise = (Math.random() - 0.5) * 5; // 加上正負 5 的隨機亮度
+        data[i] += noise;
+        data[i+1] += noise;
+        data[i+2] += noise;
+    }
+    ctx.putImageData(idata, x, y);
+
+    // 完成介面更新
+    canvas.style.display = "block";
+    document.getElementById('status').innerText = "✅ 無痕修復完成";
+    document.getElementById('downloadBtn').href = canvas.toDataURL("image/png");
+    document.getElementById('downloadBtn').style.display = "block";
+}
+</script>
+</body>
+</html>
