@@ -2,27 +2,29 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>Gemini 專業無痕修復 v7.0</title>
+    <title>Gemini 終極無痕修復 v8.0</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: -apple-system, sans-serif; background: #f4f4f9; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; }
         .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; width: 95%; max-width: 500px; }
         #status { color: #888; margin: 15px 0; font-size: 14px; font-weight: bold; }
-        .upload-area { border: 2px dashed #007bff; padding: 30px; border-radius: 15px; background: #f0f7ff; cursor: pointer; margin-bottom: 20px; }
-        canvas { max-width: 100%; border-radius: 10px; display: none; margin-top: 15px; }
+        .upload-area { border: 2px dashed #007bff; padding: 30px; border-radius: 15px; background: #f8fbff; cursor: pointer; }
+        canvas { max-width: 100%; border-radius: 10px; display: none; margin-top: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         .btn { display: inline-block; background: #28a745; color: white; padding: 12px 25px; border-radius: 10px; text-decoration: none; font-weight: bold; margin-top: 15px; border: none; }
-        .btn:disabled { background: #ccc; }
+        .loading-spinner { display: none; width: 30px; height: 30px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 10px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>🎨 專業級無痕修復 v7.0</h2>
-    <div id="status">正在初始化 AI 引擎 (OpenCV)...</div>
+    <h2>🎨 終極無痕修復 v8.0</h2>
+    <div id="status">正在加載 AI 核心...</div>
+    <div class="loading-spinner" id="spinner"></div>
 
-    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-        <strong>點擊上傳圖片</strong>
-        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(this.files[0])">
+    <div class="upload-area" id="dropZone">
+        <strong>點擊或上傳吉伊卡哇圖</strong>
+        <input type="file" id="fileInput" accept="image/*" style="display:none">
     </div>
 
     <canvas id="outputCanvas"></canvas>
@@ -34,59 +36,68 @@
 
 <script>
 let cvLoaded = false;
+const status = document.getElementById('status');
+const spinner = document.getElementById('spinner');
+const canvas = document.getElementById('outputCanvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
 function cvReady() {
     cvLoaded = true;
-    document.getElementById('status').innerText = "✅ 引擎準備就緒";
-    document.getElementById('status').style.color = "#28a745";
+    status.innerText = "✅ 引擎已就緒，請上傳圖片";
+    status.style.color = "#28a745";
 }
+
+document.getElementById('dropZone').onclick = () => document.getElementById('fileInput').click();
+document.getElementById('fileInput').onchange = (e) => handleFile(e.target.files[0]);
 
 function handleFile(file) {
     if (!file || !cvLoaded) return;
-    const status = document.getElementById('status');
-    status.innerText = "⏳ 正在計算像素修補...";
+    status.innerText = "⏳ 正在進行局部無痕修復...";
+    spinner.style.display = "block";
     
     const img = new Image();
-    img.onload = function() {
-        const canvas = document.getElementById('outputCanvas');
-        const ctx = canvas.getContext('2d');
+    img.onload = () => {
+        // 1. 準備畫布
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
 
-        // --- 核心 OpenCV 修復邏輯 ---
-        let src = cv.imread(img);
-        let dst = new cv.Mat();
-        
-        // 1. 定義右下角 ROI (局部區域) 以加速運算
-        let roiSize = Math.round(src.cols * 0.1); // 取右下角 10%
-        let roiRect = new cv.Rect(src.cols - roiSize, src.rows - roiSize, roiSize, roiSize);
-        let roiSrc = src.roi(roiRect);
-        
-        // 2. 建立遮罩 (針對菱形位置)
-        let mask = cv.Mat.zeros(roiSrc.rows, roiSrc.cols, cv.CV_8U);
-        // 在局部區域中標記右下角為需要修補
-        let p1 = new cv.Point(roiSize * 0.2, roiSize * 0.2);
-        let p2 = new cv.Point(roiSize, roiSize);
-        cv.rectangle(mask, p1, p2, [255, 255, 255, 255], -1);
+        // --- 核心優化：只處理右下角區域 (ROI) ---
+        setTimeout(() => {
+            const w = img.width;
+            const h = img.height;
+            const roiSize = Math.round(w * 0.12); // 取 12% 的區域，確保菱形被包進去
+            const roiX = w - roiSize;
+            const roiY = h - roiSize;
 
-        // 3. 執行專業 Inpaint 演算法 (Telea)
-        let roiDst = new cv.Mat();
-        cv.inpaint(roiSrc, mask, roiDst, 3, cv.INPAINT_TELEA);
+            // 2. 僅將右下角區域讀入 OpenCV (這步是防卡死的關鍵)
+            const roiData = ctx.getImageData(roiX, roiY, roiSize, roiSize);
+            let src = cv.matFromImageData(roiData);
+            let mask = cv.Mat.zeros(src.rows, src.cols, cv.CV_8U);
 
-        // 4. 將修補後的局部區域貼回原圖
-        // 我們直接操作 Canvas 進行局部覆蓋，效果最準確
-        let tempCanvas = document.createElement('canvas');
-        cv.imshow(tempCanvas, roiDst);
-        ctx.drawImage(tempCanvas, src.cols - roiSize, src.rows - roiSize);
+            // 3. 在這小塊區域建立遮罩 (菱形通常在右下角)
+            let p1 = new cv.Point(roiSize * 0.1, roiSize * 0.1);
+            let p2 = new cv.Point(roiSize, roiSize);
+            cv.rectangle(mask, p1, p2, [255, 255, 255, 255], -1);
 
-        // 5. 完成
-        canvas.style.display = "block";
-        status.innerText = "✨ 修復完成！";
-        document.getElementById('downloadBtn').href = canvas.toDataURL();
-        document.getElementById('downloadBtn').style.display = "inline-block";
+            // 4. 執行專業級像素填補 (Inpaint)
+            let dst = new cv.Mat();
+            cv.inpaint(src, mask, dst, 3, cv.INPAINT_TELEA);
 
-        // 釋放記憶體
-        src.delete(); dst.delete(); roiSrc.delete(); roiDst.delete(); mask.delete();
+            // 5. 將結果轉回畫布
+            const tempCanvas = document.createElement('canvas');
+            cv.imshow(tempCanvas, dst);
+            ctx.drawImage(tempCanvas, roiX, roiY);
+
+            // 6. 完工與釋放
+            canvas.style.display = "block";
+            status.innerText = "✨ 修復完成！";
+            spinner.style.display = "none";
+            document.getElementById('downloadBtn').href = canvas.toDataURL();
+            document.getElementById('downloadBtn').style.display = "inline-block";
+
+            src.delete(); mask.delete(); dst.delete();
+        }, 100);
     };
     const reader = new FileReader();
     reader.onload = (e) => img.src = e.target.result;
