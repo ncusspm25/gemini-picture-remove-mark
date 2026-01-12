@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Gemini 閃電去浮水印 v4.0</title>
+    <style>
+        body { font-family: 'PingFang TC', sans-serif; background: #f8f9fa; display: flex; flex-direction: column; align-items: center; padding: 30px; }
+        .container { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 8px 20px rgba(0,0,0,0.1); text-align: center; max-width: 600px; width: 100%; }
+        #status { color: #d9534f; margin: 15px 0; font-weight: bold; }
+        .canvas-container { margin-top: 20px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: #eee; }
+        canvas { max-width: 100%; display: block; }
+        .btn { display: inline-block; background: #007bff; color: white; padding: 12px 25px; border-radius: 5px; text-decoration: none; cursor: pointer; border: none; font-size: 16px; margin: 10px; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .success-btn { background: #28a745; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>⚡ Gemini 閃電修復工具</h2>
+    <div id="status">正在加載 OpenCV 引擎...</div>
+
+    <input type="file" id="fileInput" accept="image/*" style="display:none">
+    <button class="btn" id="uploadBtn" disabled>1. 選擇吉伊卡哇圖片</button>
+
+    <div class="canvas-container">
+        <canvas id="canvasOutput"></canvas>
+    </div>
+
+    <a id="downloadLink" class="btn success-btn" style="display:none;">2. 下載完美無痕圖</a>
+</div>
+
+<script async src="https://docs.opencv.org/4.5.2/opencv.js" onload="onOpenCvReady();"></script>
+
+<script>
+let uploadBtn = document.getElementById('uploadBtn');
+let status = document.getElementById('status');
+let fileInput = document.getElementById('fileInput');
+let canvas = document.getElementById('canvasOutput');
+let ctx = canvas.getContext('2d');
+let img = new Image();
+
+function onOpenCvReady() {
+    status.innerText = "✅ 引擎準備就緒";
+    status.style.color = "#28a745";
+    uploadBtn.disabled = false;
+}
+
+uploadBtn.onclick = () => fileInput.click();
+
+fileInput.onchange = (e) => {
+    let reader = new FileReader();
+    reader.onload = (event) => {
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(e.target.files[0]);
+};
+
+img.onload = function() {
+    // 1. 先將原圖畫入 Canvas
+    canvas.width = img.width;
+    canvas.height = img.height;
+    ctx.drawImage(img, 0, 0);
+    
+    status.innerText = "🚀 正在進行局部閃電修復...";
+    
+    // 給瀏覽器一點時間顯示狀態更新
+    setTimeout(fastInpaint, 50);
+};
+
+function fastInpaint() {
+    // 取得圖片寬高
+    const w = canvas.width;
+    const h = canvas.height;
+
+    // 2. 定義右下角「局部區域」 (ROI)
+    // 預設抓取右下角 150x150 像素，這足以應付大多數 2K 圖片
+    const roiW = Math.min(w, 180);
+    const roiH = Math.min(h, 180);
+    const roiX = w - roiW;
+    const roiY = h - roiH;
+
+    // 3. 讀取原圖
+    let fullSrc = cv.imread(img);
+    
+    // 4. 剪裁出局部區域進行運算
+    let rect = new cv.Rect(roiX, roiY, roiW, roiH);
+    let roiSrc = fullSrc.roi(rect);
+    let roiDst = new cv.Mat();
+    let mask = cv.Mat.zeros(roiSrc.rows, roiSrc.cols, cv.CV_8U);
+
+    // 在局部區域中建立遮罩 (菱形通常在局部座標的最右下角)
+    // 我們將局部區域的後 70% 區域標記為需要修復
+    let p1 = new cv.Point(roiW * 0.3, roiH * 0.3);
+    let p2 = new cv.Point(roiW, roiH);
+    cv.rectangle(mask, p1, p2, [255, 255, 255, 255], -1);
+
+    // 5. 針對局部區域執行修復 (這步現在超快！)
+    cv.inpaint(roiSrc, mask, roiDst, 3, cv.INPAINT_TELEA);
+
+    // 6. 將修復後的局部區塊貼回畫布
+    cv.imshow('canvasOutput', fullSrc); // 先畫全圖
+    
+    // 轉換局部 Mat 回 Canvas
+    let tempCanvas = document.createElement('canvas');
+    cv.imshow(tempCanvas, roiDst);
+    ctx.drawImage(tempCanvas, roiX, roiY);
+
+    // 7. 完成
+    status.innerText = "✨ 修復完成！";
+    document.getElementById('downloadLink').href = canvas.toDataURL();
+    document.getElementById('downloadLink').style.display = 'inline-block';
+
+    // 釋放記憶體
+    fullSrc.delete(); roiSrc.delete(); roiDst.delete(); mask.delete();
+}
+</script>
+
+</body>
+</html>
